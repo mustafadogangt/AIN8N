@@ -1,0 +1,139 @@
+{
+  "name": "Holiday Checker with Days Calculation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "holidays",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "holiday-checker-webhook"
+    },
+    {
+      "parameters": {
+        "url": "https://date.nager.at/api/v3/PublicHolidays/{{ $json.year || new Date().getFullYear() }}/{{ $json.countryCode || 'US' }}",
+        "options": {}
+      },
+      "id": "fetch-holidays",
+      "name": "Fetch Holidays",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get current date and year\nconst today = new Date();\nconst currentYear = today.getFullYear();\nconst currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());\n\n// Process each holiday\nreturn items.map(item => {\n  const holiday = item.json;\n  const holidayDate = new Date(holiday.date);\n  \n  // Calculate days until holiday (can be negative if holiday has passed)\n  const timeDiff = holidayDate.getTime() - currentDate.getTime();\n  const daysUntil = Math.ceil(timeDiff / (1000 * 3600 * 24));\n  \n  // Calculate days since holiday started (for past holidays)\n  const daysSince = Math.floor(timeDiff / (1000 * 3600 * 24));\n  \n  // Determine if holiday is upcoming, today, or past\n  let status;\n  let daysInfo;\n  \n  if (daysUntil > 0) {\n    status = 'upcoming';\n    daysInfo = `${daysUntil} days left`;\n  } else if (daysUntil === 0) {\n    status = 'today';\n    daysInfo = 'Today!';\n  } else {\n    status = 'past';\n    daysInfo = `${Math.abs(daysSince)} days ago`;\n  }\n  \n  // Format the holiday date for display\n  const formattedDate = holidayDate.toLocaleDateString('en-US', {\n    weekday: 'long',\n    year: 'numeric',\n    month: 'long',\n    day: 'numeric'\n  });\n  \n  return {\n    json: {\n      name: holiday.localName || holiday.name,\n      date: holiday.date,\n      formattedDate: formattedDate,\n      status: status,\n      daysInfo: daysInfo,\n      daysUntil: daysUntil,\n      daysSince: daysSince,\n      countryCode: holiday.countryCode,\n      fixed: holiday.fixed,\n      global: holiday.global,\n      counties: holiday.counties,\n      launchYear: holiday.launchYear,\n      types: holiday.types\n    }\n  };\n});"
+      },
+      "id": "process-holidays",
+      "name": "Process Holidays",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sort holidays by date\nconst sortedHolidays = items.sort((a, b) => {\n  return new Date(a.json.date) - new Date(b.json.date);\n});\n\n// Separate upcoming and past holidays\nconst upcomingHolidays = sortedHolidays.filter(item => item.json.status === 'upcoming' || item.json.status === 'today');\nconst pastHolidays = sortedHolidays.filter(item => item.json.status === 'past');\n\n// Create summary statistics\nconst totalHolidays = sortedHolidays.length;\nconst upcomingCount = upcomingHolidays.length;\nconst pastCount = pastHolidays.length;\nconst todayHolidays = sortedHolidays.filter(item => item.json.status === 'today');\n\n// Get next holiday\nconst nextHoliday = upcomingHolidays.length > 0 ? upcomingHolidays[0] : null;\n\n// Create formatted response\nconst response = {\n  summary: {\n    totalHolidays: totalHolidays,\n    upcomingHolidays: upcomingCount,\n    pastHolidays: pastCount,\n    todayHolidays: todayHolidays.length,\n    nextHoliday: nextHoliday ? {\n      name: nextHoliday.json.name,\n      date: nextHoliday.json.formattedDate,\n      daysLeft: nextHoliday.json.daysUntil\n    } : null\n  },\n  holidays: sortedHolidays.map(item => ({\n    name: item.json.name,\n    date: item.json.date,\n    formattedDate: item.json.formattedDate,\n    status: item.json.status,\n    daysInfo: item.json.daysInfo,\n    daysUntil: item.json.daysUntil,\n    daysSince: item.json.daysSince,\n    isFixed: item.json.fixed,\n    isGlobal: item.json.global,\n    types: item.json.types\n  }))\n};\n\nreturn [{\n  json: response\n}];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Holidays",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Holidays": {
+      "main": [
+        [
+          {
+            "node": "Process Holidays",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Holidays": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "holiday-api",
+      "name": "Holiday API"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
