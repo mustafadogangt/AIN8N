@@ -20,7 +20,20 @@
     },
     {
       "parameters": {
-        "url": "https://date.nager.at/api/v3/PublicHolidays/{{ $json.year || new Date().getFullYear() }}/{{ $json.countryCode || 'US' }}",
+        "jsCode": "// Set default values for year and countryCode\nconst currentYear = new Date().getFullYear();\nconst defaultCountry = 'US';\n\n// Get parameters from webhook body or use defaults\nconst year = $input.first().json.year || currentYear;\nconst countryCode = $input.first().json.countryCode || defaultCountry;\n\nreturn [{\n  json: {\n    year: year,\n    countryCode: countryCode,\n    url: `https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`\n  }\n}];"
+      },
+      "id": "set-parameters",
+      "name": "Set Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
         "options": {}
       },
       "id": "fetch-holidays",
@@ -28,7 +41,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        460,
+        680,
         300
       ]
     },
@@ -41,7 +54,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        900,
         300
       ]
     },
@@ -54,7 +67,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
+        1120,
         300
       ]
     },
@@ -69,13 +82,24 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        1120,
+        1340,
         300
       ]
     }
   ],
   "connections": {
     "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Parameters": {
       "main": [
         [
           {
